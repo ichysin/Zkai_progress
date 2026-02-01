@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Z会 進捗・点数マネージャー</title>
+    <title>Z会 進捗・点数マネージャー Online</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -11,6 +13,13 @@
 <body class="bg-slate-100 min-h-screen py-6 px-4" x-data="tracker()" x-init="init()">
     <div class="max-w-2xl mx-auto">
         
+        <div class="flex justify-end mb-2">
+            <span class="text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-sm" :class="connected ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'">
+                <div class="w-1.5 h-1.5 rounded-full" :class="connected ? 'bg-green-500' : 'bg-amber-500 animate-pulse'"></div>
+                <span x-text="connected ? '共有中' : '同期中...'"></span>
+            </span>
+        </div>
+
         <div class="flex justify-center mb-6 space-x-2">
             <button @click="view = 'main'" :class="view === 'main' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'" class="px-6 py-2 rounded-full text-sm font-bold shadow-sm transition">進捗入力</button>
             <button @click="openChart()" :class="view === 'chart' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'" class="px-6 py-2 rounded-full text-sm font-bold shadow-sm transition">グラフ表示</button>
@@ -18,19 +27,18 @@
 
         <div x-show="view === 'main'">
             <header class="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200 text-center">
-                <h2 class="text-xl font-bold text-slate-800">Z会 進捗マネージャー</h2>
-                
+                <h2 class="text-xl font-bold text-slate-800">Z会 進捗マネージャー Online</h2>
                 <div class="flex flex-col items-center justify-center gap-2 mt-4">
                     <div class="flex items-center space-x-4 bg-slate-100 p-2 rounded-2xl border border-slate-200">
-                        <button @click="changeMonth(-1)" :disabled="year === 2025 && month === 10" :class="year === 2025 && month === 10 ? 'opacity-20 cursor-not-allowed' : 'hover:bg-blue-500 hover:text-white'" class="w-10 h-10 flex items-center justify-center bg-white shadow-sm rounded-xl transition-all font-bold text-slate-600">◀</button>
+                        <button @click="changeMonth(-1)" :disabled="year === 2025 && month === 10" class="w-10 h-10 flex items-center justify-center bg-white shadow-sm rounded-xl font-bold text-slate-600 disabled:opacity-20">◀</button>
                         <div class="text-center min-w-[120px]">
-                            <span class="block text-[10px] text-slate-400 font-bold uppercase" x-text="year + '年'"></span>
+                            <span class="block text-[10px] text-slate-400 font-bold" x-text="year + '年'"></span>
                             <span class="text-lg font-black text-slate-700" x-text="month + '月号'"></span>
                         </div>
-                        <button @click="changeMonth(1)" class="w-10 h-10 flex items-center justify-center bg-white shadow-sm rounded-xl hover:bg-blue-500 hover:text-white transition-all font-bold text-slate-600">▶</button>
+                        <button @click="changeMonth(1)" class="w-10 h-10 flex items-center justify-center bg-white shadow-sm rounded-xl font-bold text-slate-600">▶</button>
                     </div>
-                    <button @click="resetAll()" class="mt-2 text-[10px] text-red-400 hover:text-red-600 underline italic">この月のデータを初期化する</button>
-                    <p class="text-[10px] text-slate-400 font-medium mt-1">ボタン切替順：未着手 → 完了 → マル付済 → 見直し済 → 該当なし</p>
+                    <button @click="resetAll()" class="mt-2 text-[10px] text-red-400 hover:text-red-600 underline italic">この月のデータを初期化</button>
+                    <p class="text-[10px] text-slate-400 font-medium mt-1">切替：未着手 → 完了 → マル付済 → 見直し済 → 該当なし</p>
                 </div>
             </header>
 
@@ -46,27 +54,25 @@
                                 <span class="text-xl font-mono font-bold text-slate-600" x-text="calcProgress(sub) + '%'"></span>
                             </div>
                             <div class="h-2 w-full bg-slate-200">
-                                <div class="h-full transition-all duration-500 shadow-inner" :class="sub.color" :style="'width: ' + calcProgress(sub) + '%'"></div>
+                                <div class="h-full transition-all duration-500" :class="sub.color" :style="'width: ' + calcProgress(sub) + '%'"></div>
                             </div>
                             <div class="p-3 grid grid-cols-3 gap-2">
                                 <template x-for="(task, tIdx) in sub.tasks" :key="tIdx">
                                     <div :class="task.includes('月例') ? 'col-span-3 flex items-center space-x-2 mt-2 pt-2 border-t border-slate-100' : ''">
                                         <button @click="cycleStatus(sIdx, tIdx)" 
-                                            class="w-full flex flex-col justify-center items-center p-2 rounded-xl transition text-center border-2 min-h-[70px] gap-1"
+                                            class="w-full flex flex-col justify-center items-center p-2 rounded-xl transition border-2 min-h-[70px] gap-1"
                                             :class="statusClasses[sub.status[tIdx]]">
                                             <span class="text-[13px] font-bold leading-tight" x-text="task"></span>
                                             <span class="text-[10px] font-black uppercase px-1.5 py-0.5 rounded-md bg-white/60 shadow-sm" x-text="statusLabels[sub.status[tIdx]]"></span>
                                         </button>
                                         <template x-if="task.includes('月例')">
                                             <div class="flex items-center space-x-1 shrink-0">
-                                                <div class="flex items-center border-2 rounded-xl px-1.5 h-[70px] w-[75px] transition-colors"
-                                                     :class="sub.scores[tIdx] < 70 && !sub.retest[tIdx] ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200'">
-                                                    <input type="number" x-model.number="sub.scores[tIdx]" @input="validateScore(sIdx, tIdx)" class="w-full bg-transparent text-center font-bold focus:outline-none text-lg" :class="sub.scores[tIdx] < 70 ? 'text-red-600' : 'text-slate-800'">
-                                                    <span class="text-[9px] font-bold text-slate-400">点</span>
+                                                <div class="flex items-center border-2 rounded-xl px-1.5 h-[70px] w-[75px]" :class="sub.scores[tIdx] < 70 && !sub.retest[tIdx] ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200'">
+                                                    <input type="number" x-model.number="sub.scores[tIdx]" @blur="saveToDB()" class="w-full bg-transparent text-center font-bold text-lg focus:outline-none">
                                                 </div>
-                                                <div class="flex flex-col items-center justify-center border-2 border-slate-200 bg-white rounded-xl px-1 h-[70px] w-[55px]">
-                                                    <span class="text-[8px] font-bold text-slate-400 mb-1 scale-90">再テスト</span>
-                                                    <input type="checkbox" x-model="sub.retest[tIdx]" @change="save()" class="w-5 h-5 rounded text-blue-600">
+                                                <div class="flex flex-col items-center justify-center border-2 border-slate-200 bg-white rounded-xl h-[70px] w-[55px]">
+                                                    <span class="text-[8px] font-bold text-slate-400 scale-90">再テスト</span>
+                                                    <input type="checkbox" x-model="sub.retest[tIdx]" @change="saveToDB()" class="w-5 h-5 rounded text-blue-600">
                                                 </div>
                                             </div>
                                         </template>
@@ -79,98 +85,117 @@
             </div>
         </div>
 
-        <div x-show="view === 'chart'" x-transition class="space-y-6">
+        <div x-show="view === 'chart'" class="space-y-6">
             <div class="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
                 <h2 class="text-center font-bold text-slate-700 mb-4">月別進捗推移 (%)</h2>
-                <div class="relative h-[300px] w-full">
-                    <canvas id="progressChart"></canvas>
-                </div>
+                <div class="relative h-[300px] w-full"><canvas id="progressChart"></canvas></div>
             </div>
-
             <div class="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
                 <h2 class="text-center font-bold text-slate-700 mb-4">テスト点数推移 (点)</h2>
-                <div class="relative h-[300px] w-full">
-                    <canvas id="scoreChart"></canvas>
-                </div>
-                <p class="text-[10px] text-slate-400 mt-4 text-center italic">※月例テストの点数を表示しています</p>
+                <div class="relative h-[300px] w-full"><canvas id="scoreChart"></canvas></div>
             </div>
         </div>
-        <div class="pb-12"></div>
+        <div class="pb-12 text-center text-[10px] text-slate-400">Shared via Firebase Realtime Database</div>
     </div>
 
-    <script>
+    <script  type="module">
+        // --- ★ここを書き換える★ ---
+         // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-analytics.js";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+            apiKey: "AIzaSyB5zWByIyIpMPS8A_Y4XLkXoJlRxxhLFJk",
+            authDomain: "zkai-progress.firebaseapp.com",
+            databaseURL: "https://zkai-progress-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "zkai-progress",
+            storageBucket: "zkai-progress.firebasestorage.app",
+            messagingSenderId: "301293199910",
+            appId: "1:301293199910:web:75165d89e3352bed1f7ce7",
+            measurementId: "G-Y8L3M2FPLV"
+        };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+        // -------------------------
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
         function tracker() {
-            const tasks_standard = ['1回目 第1回', '1回目 第2回', '1回目 第3回', '1回目 月例テスト', '2回目 第1回', '2回目 第2回', '2回目 第3回', '2回目 月例テスト'];
-            const tasks_long = ['1回目 第1回', '1回目 第2回', '1回目 第3回', '1回目 第4回', '1回目 第5回', '1回目 月例テスト', '2回目 第1回', '2回目 第2回', '2回目 第3回', '2回目 第4回', '2回目 第5回', '2回目 月例テスト'];
+            const tasks_st = ['1回目 第1回', '1回目 第2回', '1回目 第3回', '1回目 月例テスト', '2回目 第1回', '2回目 第2回', '2回目 第3回', '2回目 月例テスト'];
+            const tasks_lo = ['1回目 第1回', '1回目 第2回', '1回目 第3回', '1回目 第4回', '1回目 第5回', '1回目 月例テスト', '2回目 第1回', '2回目 第2回', '2回目 第3回', '2回目 第4回', '2回目 第5回', '2回目 月例テスト'];
 
             return {
-                view: 'main', year: 2025, month: 10,
+                view: 'main', year: 2025, month: 10, connected: false,
                 statusLabels: ['未着手', '完了', 'マル付済', '見直し済', '該当なし'],
-                statusClasses: [
-                    'bg-white border-slate-100 text-slate-500',
-                    'bg-blue-50 border-blue-200 text-blue-700 font-medium',
-                    'bg-yellow-50 border-yellow-200 text-yellow-700 font-medium',
-                    'bg-green-100 border-green-300 text-green-800 font-bold',
-                    'bg-slate-200 border-slate-300 text-slate-500 opacity-60'
-                ],
-                data: null, chartInstance1: null, chartInstance2: null,
-                init() { this.loadData(); },
-                loadData() {
-                    const key = `zkai-${this.year}-${this.month}`;
-                    const saved = localStorage.getItem(key);
-                    if (saved) { this.data = JSON.parse(saved); } else { this.createNewMonthData(); }
+                statusClasses: ['bg-white border-slate-100 text-slate-500', 'bg-blue-50 border-blue-200 text-blue-700', 'bg-yellow-50 border-yellow-200 text-yellow-700', 'bg-green-100 border-green-300 text-green-800', 'bg-slate-200 border-slate-300 opacity-60'],
+                data: null, charts: [null, null],
+
+                init() { this.sync(); },
+
+                sync() {
+                    db.ref(`zkai/${this.year}_${this.month}`).on('value', snap => {
+                        this.connected = true;
+                        this.data = snap.val() || this.createNewMonthData();
+                    });
                 },
+
+                saveToDB() { db.ref(`zkai/${this.year}_${this.month}`).set(this.data); },
+
                 createNewMonthData() {
-                    this.data = {
+                    return {
                         subjects: [
-                            { name: '算数', color: 'bg-blue-500', tasks: [...tasks_long], status: Array(tasks_long.length).fill(0), scores: Array(tasks_long.length).fill(0), retest: Array(tasks_long.length).fill(false) },
-                            { name: '国語', color: 'bg-red-500', tasks: [...tasks_long], status: Array(tasks_long.length).fill(0), scores: Array(tasks_long.length).fill(0), retest: Array(tasks_long.length).fill(false) },
-                            { name: '理科', color: 'bg-green-500', tasks: [...tasks_standard], status: Array(tasks_standard.length).fill(0), scores: Array(tasks_standard.length).fill(0), retest: Array(tasks_standard.length).fill(false) },
-                            { name: '社会', color: 'bg-orange-500', tasks: [...tasks_standard], status: Array(tasks_standard.length).fill(0), scores: Array(tasks_standard.length).fill(0), retest: Array(tasks_standard.length).fill(false) }
+                            { name: '算数', color: 'bg-blue-500', tasks: [...tasks_lo], status: Array(tasks_lo.length).fill(0), scores: Array(tasks_lo.length).fill(0), retest: Array(tasks_lo.length).fill(false) },
+                            { name: '国語', color: 'bg-red-500', tasks: [...tasks_lo], status: Array(tasks_lo.length).fill(0), scores: Array(tasks_lo.length).fill(0), retest: Array(tasks_lo.length).fill(false) },
+                            { name: '理科', color: 'bg-green-500', tasks: [...tasks_st], status: Array(tasks_st.length).fill(0), scores: Array(tasks_st.length).fill(0), retest: Array(tasks_st.length).fill(false) },
+                            { name: '社会', color: 'bg-orange-500', tasks: [...tasks_st], status: Array(tasks_st.length).fill(0), scores: Array(tasks_st.length).fill(0), retest: Array(tasks_st.length).fill(false) }
                         ]
                     };
                 },
-                validateScore(sIdx, tIdx) {
-                    let score = this.data.subjects[sIdx].scores[tIdx];
-                    if (score > 100) this.data.subjects[sIdx].scores[tIdx] = 100;
-                    if (score < 0 || score === '') this.data.subjects[sIdx].scores[tIdx] = 0;
-                    this.save();
-                },
-                save() { localStorage.setItem(`zkai-${this.year}-${this.month}`, JSON.stringify(this.data)); },
+
                 cycleStatus(sIdx, tIdx) {
                     this.data.subjects[sIdx].status[tIdx] = (this.data.subjects[sIdx].status[tIdx] + 1) % 5;
-                    this.save();
+                    this.saveToDB();
                 },
+
                 calcProgress(sub) {
-                    const totalPoints = sub.status.reduce((acc, s, i) => {
+                    const total = sub.status.reduce((acc, s, i) => {
                         let isTest = sub.tasks[i].includes('月例');
-                        if (isTest && sub.scores[i] < 70 && !sub.retest[i]) return acc + 0;
-                        if (s === 3 || s === 4) return acc + 1;
-                        if (s === 2) return acc + 0.6;
-                        if (s === 1) return acc + 0.3;
-                        return acc;
+                        if (isTest && sub.scores[i] < 70 && !sub.retest[i]) return acc;
+                        return acc + (s === 3 || s === 4 ? 1 : s === 2 ? 0.6 : s === 1 ? 0.3 : 0);
                     }, 0);
-                    return Math.min(100, Math.round((totalPoints / sub.tasks.length) * 100));
+                    return Math.round((total / sub.tasks.length) * 100);
                 },
+
                 changeMonth(diff) {
                     let nm = this.month + diff; let ny = this.year;
                     if (nm > 12) { nm = 1; ny++; } else if (nm < 1) { nm = 12; ny--; }
                     if (ny < 2025 || (ny === 2025 && nm < 10)) { this.year = 2025; this.month = 10; } 
                     else { this.month = nm; this.year = ny; }
-                    this.loadData();
+                    this.connected = false;
+                    db.ref(`zkai/${this.year}_${this.month}`).off();
+                    this.sync();
                 },
-                resetAll() {
-                    if(confirm(`${this.year}年${this.month}月のデータをリセットしますか？`)) {
-                        this.createNewMonthData(); this.save();
-                    }
-                },
+
+                resetAll() { if(confirm('初期化しますか？')) { this.data = this.createNewMonthData(); this.saveToDB(); } },
+
                 openChart() {
                     this.view = 'chart';
-                    this.$nextTick(() => { this.renderCharts(); });
+                    db.ref(`zkai`).once('value', snap => {
+                        const allData = snap.val();
+                        this.$nextTick(() => this.renderCharts(allData));
+                    });
                 },
-                renderCharts() {
-                    const months = [];
-                    const scoreLabels = [];
+
+                renderCharts(allData) {
+                    if (!allData) return;
+                    const months = Object.keys(allData).sort();
                     const datasetsProgress = [
                         { label: '算数', data: [], borderColor: '#3b82f6', tension: 0.3 },
                         { label: '国語', data: [], borderColor: '#ef4444', tension: 0.3 },
@@ -178,44 +203,31 @@
                         { label: '社会', data: [], borderColor: '#f97316', tension: 0.3 }
                     ];
                     const datasetsScores = JSON.parse(JSON.stringify(datasetsProgress));
+                    const scoreLabels = [];
 
-                    let current = new Date(2025, 9, 1);
-                    let end = new Date(this.year, this.month + 2, 1);
-                    
-                    while (current <= end) {
-                        let y = current.getFullYear(); let m = current.getMonth() + 1;
-                        let saved = localStorage.getItem(`zkai-${y}-${m}`);
-                        if (saved) {
-                            let parsed = JSON.parse(saved);
-                            months.push(`${m}月`);
-                            parsed.subjects.forEach((sub, idx) => {
-                                // 進捗データの収集
-                                datasetsProgress[idx].data.push(this.calcProgress(sub));
-                                // 点数データの収集
-                                sub.tasks.forEach((t, tIdx) => {
-                                    if(t.includes('月例')) {
-                                        if (idx === 0) scoreLabels.push(`${m}月-${t.split(' ')[0]}`);
-                                        datasetsScores[idx].data.push(sub.scores[tIdx]);
-                                    }
-                                });
+                    months.forEach(key => {
+                        const monthData = allData[key];
+                        const mStr = key.split('_')[1] + '月';
+                        datasetsProgress.forEach((ds, idx) => {
+                            ds.data.push(this.calcProgress(monthData.subjects[idx]));
+                            monthData.subjects[idx].tasks.forEach((t, tIdx) => {
+                                if(t.includes('月例')) {
+                                    if(idx === 0) scoreLabels.push(`${mStr}-${t.split(' ')[0]}`);
+                                    datasetsScores[idx].data.push(monthData.subjects[idx].scores[tIdx]);
+                                }
                             });
-                        }
-                        current.setMonth(current.getMonth() + 1);
-                    }
-
-                    // 進捗グラフ描画
-                    if (this.chartInstance1) this.chartInstance1.destroy();
-                    this.chartInstance1 = new Chart(document.getElementById('progressChart'), {
-                        type: 'line',
-                        data: { labels: months, datasets: datasetsProgress },
-                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
+                        });
                     });
 
-                    // 点数グラフ描画
-                    if (this.chartInstance2) this.chartInstance2.destroy();
-                    this.chartInstance2 = new Chart(document.getElementById('scoreChart'), {
+                    this.draw('progressChart', months, datasetsProgress, 0);
+                    this.draw('scoreChart', scoreLabels, datasetsScores, 1);
+                },
+
+                draw(id, labels, datasets, idx) {
+                    if (this.charts[idx]) this.charts[idx].destroy();
+                    this.charts[idx] = new Chart(document.getElementById(id), {
                         type: 'line',
-                        data: { labels: scoreLabels, datasets: datasetsScores },
+                        data: { labels, datasets },
                         options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
                     });
                 }
