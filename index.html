@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Z会 進捗・点数マネージャー Online</title>
+    <title>Z会 進捗マネージャー Online Pro</title>
     
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -15,7 +15,14 @@
 <body class="bg-slate-100 min-h-screen py-6 px-4" x-data="tracker()" x-init="init()">
     <div class="max-w-2xl mx-auto">
         
-        <div class="flex justify-end mb-2">
+        <div class="flex justify-between items-center mb-2">
+            <div class="flex gap-2">
+                <button @click="exportData()" class="text-[10px] bg-white border border-slate-300 px-2 py-1 rounded shadow-sm hover:bg-slate-50 transition">💾 バックアップ</button>
+                <label class="text-[10px] bg-white border border-slate-300 px-2 py-1 rounded shadow-sm hover:bg-slate-50 transition cursor-pointer">
+                    📂 復元
+                    <input type="file" @change="importData($event)" class="hidden" accept=".json">
+                </label>
+            </div>
             <span class="text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-sm" :class="connected ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'">
                 <div class="w-1.5 h-1.5 rounded-full" :class="connected ? 'bg-green-500' : 'bg-amber-500 animate-pulse'"></div>
                 <span x-text="connected ? '共有中' : '同期中...'"></span>
@@ -102,7 +109,6 @@
     </div>
 
     <script>
-        // --- Firebase 設定 ---
         const firebaseConfig = {
             apiKey: "AIzaSyB5zWByIyIpMPS8A_Y4XLkXoJlRxxhLFJk",
             authDomain: "zkai-progress.firebaseapp.com",
@@ -113,7 +119,6 @@
             appId: "1:301293199910:web:75165d89e3352bed1f7ce7"
         };
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
@@ -175,6 +180,40 @@
                 },
 
                 resetAll() { if(confirm('初期化しますか？')) { this.data = this.createNewMonthData(); this.saveToDB(); } },
+
+                // --- バックアップ機能 ---
+                exportData() {
+                    db.ref('zkai').once('value', snap => {
+                        const data = snap.val();
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `zkai_backup_${new Date().toISOString().split('T')[0]}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    });
+                },
+
+                importData(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const imported = JSON.parse(e.target.result);
+                            if (confirm('データベース全体のデータをこのファイルの内容で上書きしますか？')) {
+                                db.ref('zkai').set(imported).then(() => {
+                                    alert('復元が完了しました。');
+                                    location.reload();
+                                });
+                            }
+                        } catch (err) {
+                            alert('ファイルの読み込みに失敗しました。正いJSONファイルか確認してください。');
+                        }
+                    };
+                    reader.readAsText(file);
+                },
 
                 openChart() {
                     this.view = 'chart';
